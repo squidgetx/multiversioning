@@ -9,7 +9,6 @@
 #include <numa.h>
 #include <mv_table.h>
 
-#define _NUM_PARTITIONS_ 2
 
 extern uint64_t recordSize;
 
@@ -34,7 +33,7 @@ class MVActionDistributor : public Runnable {
 
     SimpleQueue<ActionBatch> *inputQueue;
 
-    SimpleQueue<ActionBatch> **outputQueues;
+    SimpleQueue<ActionBatch> *outputQueue;
 
     static uint32_t GetCCThread(CompositeKey& key);
 
@@ -49,11 +48,12 @@ class MVActionDistributor : public Runnable {
 
     MVActionDistributor(int cpuNumber,
         SimpleQueue<ActionBatch> *inputQueue,
-        SimpleQueue<ActionBatch> **outputQueues,
+        SimpleQueue<ActionBatch> *outputQueue,
         SimpleQueue<int> *orderInput,
         SimpleQueue<int> *orderOutput,
         bool leader
     );
+  static uint32_t NUM_CC_THREADS;
 };
 
 #endif    /* PPP_H_ */

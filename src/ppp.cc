@@ -1,11 +1,13 @@
 #include <ppp.h>
 
+uint32_t MVActionDistributor::NUM_CC_THREADS = 1;
+
 void MVActionDistributor::log (string msg) {
   std::stringstream m;
   m << this->getCpuNum() << ": " << msg << "\n";
   std::cout << m.str();
 }
-
+  
 void* MVActionDistributor::operator new(std::size_t sz, int cpu) {
   void *ret = alloc_mem(sz, cpu);
   assert(ret != NULL);
@@ -16,13 +18,13 @@ void MVActionDistributor::Init() {}
 
 MVActionDistributor::MVActionDistributor(int cpuNumber, 
     SimpleQueue<ActionBatch> *inputQueue,
-    SimpleQueue<ActionBatch> **outputQueues,
+    SimpleQueue<ActionBatch> *outputQueue,
     SimpleQueue<int> *orderInput,
     SimpleQueue<int> *orderOutput,
     bool leader
 ): Runnable(cpuNumber) {
   this->inputQueue = inputQueue;
-  this->outputQueues = outputQueues;
+  this->outputQueue = outputQueue;
   this->orderingInputQueue = orderInput;
   this->orderingOutputQueue = orderOutput;
   // If this is the leader preprocessing thread (the first one),
@@ -40,7 +42,7 @@ MVActionDistributor::MVActionDistributor(int cpuNumber,
 uint32_t MVActionDistributor::GetCCThread(CompositeKey& key) 
 {
         uint64_t hash = CompositeKey::Hash(&key);
-        return (uint32_t)(hash % _NUM_PARTITIONS_);
+        return (uint32_t)(hash % NUM_CC_THREADS);
 }
 
 // Output to concurrency control layer:
@@ -56,10 +58,10 @@ uint32_t MVActionDistributor::GetCCThread(CompositeKey& key)
 void MVActionDistributor::ProcessAction(mv_action * action, mv_action * last_action) {
   std::vector<CompositeKey> readset = action->__readset;
   std::vector<CompositeKey> writeset = action->__writeset;
-  int cc_threads[_NUM_PARTITIONS_] = {0};
-  int keys[_NUM_PARTITIONS_];
+  int cc_threads[NUM_CC_THREADS] = {0};
+  int keys[NUM_CC_THREADS];
 
-  for (int i = 0; i < _NUM_PARTITIONS_; i++) {
+  for (int i = 0; i < NUM_CC_THREADS; i++) {
     keys[i] = -1;
   }
   for(int i = 0; i < readset.size(); i++) {
@@ -74,7 +76,7 @@ void MVActionDistributor::ProcessAction(mv_action * action, mv_action * last_act
     keys[partition] = i;
   }
 
-  for (int i = 0; i < _NUM_PARTITIONS_; i++) {
+  for (int i = 0; i < NUM_CC_THREADS; i++) {
     keys[i] = -1;
   }
   for(int i = 0; i < writeset.size(); i++) {
@@ -90,7 +92,7 @@ void MVActionDistributor::ProcessAction(mv_action * action, mv_action * last_act
   }
 
   if (last_action != NULL) {
-    for(int i = 0; i < _NUM_PARTITIONS_; i++) {
+    for(int i = 0; i < NUM_CC_THREADS; i++) {
       int partition = cc_threads[i];
       last_action->__nextAction[partition] = action;
     }
@@ -125,9 +127,7 @@ void MVActionDistributor::StartWorking() {
     // begin working on the next batch while waiting
     orderingInputQueue->DequeueBlocking();
     // do the output
-    for(uint32_t i = 0; i < _NUM_PARTITIONS_; ++i) {
-      outputQueues[i]->EnqueueBlocking(batch);
-    }
+    outputQueue->EnqueueBlocking(batch);
     // Notify next thread that they can output
     orderingOutputQueue->EnqueueBlocking(1);
 

@@ -107,6 +107,7 @@ struct MVConfig {
   uint32_t numTxns;
   uint32_t epochSize;
   uint32_t numRecords;
+  uint32_t numPPPThreads = 1;
   uint32_t numWorkerThreads;
   uint32_t txnSize;
   uint32_t experiment;

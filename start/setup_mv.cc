@@ -3,6 +3,7 @@
 #include <mv_action.h>
 #include <concurrent_queue.h>
 #include <preprocessor.h>
+#include <ppp.h>
 #include <executor.h>
 #include <iostream>
 #include <fstream>
@@ -65,7 +66,6 @@ static void CreateQueues(int cpuNumber, uint32_t subCount,
         *OUT_PUB_QUEUES = pubQueues;
         *OUT_SUB_QUEUES = subQueues;
 }
-
 
 static MVSchedulerConfig SetupSched(int cpuNumber, 
                                     uint32_t threadId, 
@@ -344,8 +344,45 @@ static SimpleQueue<T>* SetupQueuesMany(uint32_t numEntries, uint32_t numQueues, 
   return queues;
 }
 
+static MVActionDistributor** SetupPPPThreads(int numProcs,
+                                             SimpleQueue<ActionBatch> ** inputRef,
+                                             SimpleQueue<ActionBatch> ** outputRef) {
+  MVActionDistributor** procArray = 
+    (MVActionDistributor**) alloc_mem(sizeof(MVScheduler*)*numProcs, 79);
+
+  uint32_t QSIZE = 2;
+  char* mem = (char*) alloc_mem(sizeof(CACHE_LINE*2*QSIZE), 1);
+  SimpleQueue<ActionBatch>* inputQueue = new SimpleQueue<ActionBatch>(mem, QSIZE);
+  memset(mem, 0x00, CACHE_LINE*2*QSIZE);
+  *inputRef = inputQueue;
+
+  mem = (char*) alloc_mem(sizeof(CACHE_LINE*2*QSIZE), 1);
+  SimpleQueue<ActionBatch>* outputQueue = new SimpleQueue<ActionBatch>(mem, QSIZE);
+  memset(mem, 0x00, CACHE_LINE*2*QSIZE);
+  *outputRef = outputQueue;
+
+  mem = (char*) alloc_mem(sizeof(CACHE_LINE*2*QSIZE), 1);
+  SimpleQueue<int>* last_link = new SimpleQueue<int>(mem, QSIZE);
+  memset(mem, 0x00, CACHE_LINE*2*QSIZE);
+  SimpleQueue<int>* old_link = last_link;
+  for (int i = 0 ; i < numProcs; i++) {
+    int cpuNum = i;
+    SimpleQueue<int> *link;
+    if (i == numProcs - 1) {
+      link = last_link;
+    } else {
+      mem = (char*) alloc_mem(sizeof(CACHE_LINE*2*QSIZE), 1);
+      link = new SimpleQueue<int>(mem, QSIZE);
+      memset(mem, 0x00, CACHE_LINE*2*QSIZE);
+    }
+    procArray[i] = new (cpuNum) MVActionDistributor(cpuNum, inputQueue, outputQueue, old_link, link, i == 0);
+    old_link = link;
+  }
+  return procArray;
+}
+
 static MVScheduler** SetupSchedulers(int numProcs, 
-                                     SimpleQueue<ActionBatch> **inputQueueRef_OUT, 
+                                     SimpleQueue<ActionBatch> *topInputQueue, 
                                      SimpleQueue<ActionBatch> **outputQueueRefs_OUT, 
                                      uint32_t numOutputs,
                                      size_t allocatorSize, 
@@ -361,9 +398,11 @@ static MVScheduler** SetupSchedulers(int numProcs,
   }
 
   // Set up queues for leader thread
+  /*
   char *inputArray = (char*)alloc_mem(CACHE_LINE*INPUT_SIZE, 0);            
   SimpleQueue<ActionBatch> *leaderInputQueue = 
     new SimpleQueue<ActionBatch>(inputArray, INPUT_SIZE);
+    */
 
   SimpleQueue<ActionBatch> *leaderOutputQueues = 
     SetupQueuesMany<ActionBatch>(INPUT_SIZE, (uint32_t)numOutputs, 0);
@@ -376,7 +415,7 @@ static MVScheduler** SetupSchedulers(int numProcs,
                                                     numTables,
                                                     tblPartitionSizes, 
                                                     numOutputs,
-                                                    leaderInputQueue,
+                                                    topInputQueue,
                                                     numOutputs,
                                                     leaderOutputQueues,
                                                     worker_start, worker_end);
@@ -421,7 +460,6 @@ static MVScheduler** SetupSchedulers(int numProcs,
     }
   }
   
-  *inputQueueRef_OUT = leaderInputQueue;
   *outputQueueRefs_OUT = leaderOutputQueues;
   return schedArray;
 }
@@ -442,28 +480,48 @@ static uint32_t get_num_epochs(MVConfig config)
  * XXX Ideally, this should happen _online_, and "route" transactions to the
  * appropriate concurrency control threads, but we're doing it offline because 
  * it's good enough for experiments.
+ *
+ * Basically, make a linked list where the starts vector is of size NUM_CC_THREADS
+ * vector[i] tells you the first index in the vector of composite keys that is for thread i
+ * and each composite key has an int field 'next' that points to the next key for thread i
+ *
+ * So do we want to just move this to an outer layer? and the prepreprocessor just does this step
+ * and then puts the txn in the appropriate output Qs (sending it to multiple CC threads, but only the relevant ones)
+ * Instead of sending composite keys..
+ *
+ * Do we have issue with changing concurrency threads
+ *
+ * OK new idea... send batches of write/read actions to the concurrency control layer. each batch also has the batch of txns
+ * in total order. I mean, the write/read actions could even be associated with the txn object, who cares.Then the concurrency
+ * layer can output the associated batch of txn objects to the execution layer.
+ *
+ *
  */
+/*
 static void do_preprocessing(vector<CompositeKey> &keys, vector<int> &starts)
 {
         CompositeKey mv_key;
         int indices[NUM_CC_THREADS], index, *ptr;
         uint32_t i, num_keys;
-
         for (i = 0; i < NUM_CC_THREADS; ++i)
                 indices[i] = -1;
         num_keys = keys.size();
         for (i = 0; i < num_keys; ++i) {
                 mv_key = keys[i];
                 if (indices[mv_key.threadId] != -1) {
+                  // If this key's thread ID is found
                         index = indices[mv_key.threadId];
+                  // Look in the list of keys at that index
+                  // Assign ptr to the next field of that 
                         ptr = &keys[index].next;
                 } else {
+                  // If it wasn't found, then put i in the starts vector
                         ptr = &starts[mv_key.threadId];
                 }
                 indices[mv_key.threadId] = i;
                 *ptr = i;
         }
-}
+}*/
 
 static void convert_keys(mv_action *action, txn *txn)
 {
@@ -513,8 +571,10 @@ static mv_action* generate_mv_action(txn *txn)
         /* 
          * Pre-process rw-sets for more concurrency control phase parallelism. 
          */
+        /*
         do_preprocessing(action->__writeset, action->__write_starts);
         do_preprocessing(action->__readset, action->__read_starts);
+        */
         action->setup_reverse_index();
         return action;        
 }
@@ -655,6 +715,7 @@ static void init_database(MVConfig config,
                           workload_config w_conf,
                           SimpleQueue<ActionBatch> *input_queue,
                           SimpleQueue<ActionBatch> *output_queue,
+                          MVActionDistributor **ppp_threads,
                           MVScheduler **sched_threads,
                           Executor **exec_threads)
                           
@@ -664,6 +725,11 @@ static void init_database(MVConfig config,
         int pin_success;
         pin_success = pin_thread(79);
         assert(pin_success == 0);
+        for (i = 0; i < config.numPPPThreads; ++i) {
+                ppp_threads[i]->Run();        
+                ppp_threads[i]->WaitInit();
+        }
+
         init_batch = generate_db(w_conf);
         for (i = 0; i < config.numCCThreads; ++i) {
                 sched_threads[i]->Run();        
@@ -682,8 +748,18 @@ static void init_database(MVConfig config,
         return;
 }
 
+static MVActionDistributor** setup_ppp_threads(MVConfig config,
+                                               SimpleQueue<ActionBatch> ** ppp_input,
+                                               SimpleQueue<ActionBatch> ** ppp_output)
+{
+  int num_threads = config.numPPPThreads;
+  MVActionDistributor **distributors;
+  distributors = SetupPPPThreads(num_threads, ppp_input, ppp_output);
+  return distributors;
+}
+
 static MVScheduler** setup_scheduler_threads(MVConfig config,
-                                             SimpleQueue<ActionBatch> **sched_input,
+                                             SimpleQueue<ActionBatch> *sched_input,
                                              SimpleQueue<ActionBatch> **sched_output,
                                              SimpleQueue<MVRecordList> ***gc_queues)
 {
@@ -710,7 +786,7 @@ static MVScheduler** setup_scheduler_threads(MVConfig config,
                                      worker_start,
                                      worker_end);
         assert(schedulers != NULL);
-        assert(*sched_input != NULL);
+        //assert(*sched_input != NULL);
         assert(*sched_output != NULL);
         std::cerr << "Done setting up scheduler threads!\n";
         std::cerr << "Num scheduler threads:";
@@ -738,10 +814,13 @@ static Executor** setup_executors(MVConfig config,
 
 void do_mv_experiment(MVConfig mv_config, workload_config w_config)
 {
+        MVActionDistributor **pppThreads;
         MVScheduler **schedThreads;
         Executor **execThreads;
-        SimpleQueue<ActionBatch> *schedInputQueue;
         SimpleQueue<ActionBatch> *schedOutputQueues;
+        SimpleQueue<ActionBatch> *pppInputQueue;
+        SimpleQueue<ActionBatch> *pppOutputQueue;
+        
         SimpleQueue<MVRecordList> **schedGCQueues[mv_config.numCCThreads];
         SimpleQueue<ActionBatch> *outputQueue;
         std::vector<ActionBatch> input_placeholder;
@@ -763,16 +842,18 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
         outputQueue = SetupQueuesMany<ActionBatch>(INPUT_SIZE,
                                                    mv_config.numWorkerThreads,
                                                    71);
-        schedThreads = setup_scheduler_threads(mv_config, &schedInputQueue,
+        pppThreads = setup_ppp_threads(mv_config, &pppInputQueue, &pppOutputQueue);
+
+        schedThreads = setup_scheduler_threads(mv_config, pppOutputQueue,
                                                &schedOutputQueues,
                                                schedGCQueues);
         mv_setup_input_array(&input_placeholder, mv_config, w_config);
         execThreads = setup_executors(mv_config, schedOutputQueues, outputQueue,
                                       schedGCQueues);
-        init_database(mv_config, w_config, schedInputQueue, outputQueue,
-                      schedThreads, execThreads);
+        init_database(mv_config, w_config, pppInputQueue, outputQueue,
+                      pppThreads, schedThreads, execThreads);
         pin_memory();
-        elapsed_time = run_experiment(schedInputQueue,  //&schedOutputQueues[config.numWorkerThreads],
+        elapsed_time = run_experiment(pppInputQueue,  //&schedOutputQueues[config.numWorkerThreads],
                                       outputQueue,
                                       input_placeholder,// 1);
                                       mv_config.numWorkerThreads);
