@@ -7,16 +7,32 @@ class ConsistentHash {
     //  1. initialize variables
     //  2. allocate partition_map and thread_map (done in setup_mv)
     //  3. allocate each _partition in round robin format for threads
-    ConsistentHash(uint64_t _threads, uint64_t _partitions) {
-      num_partitions = _partitions;
-      num_threads = _threads;
-      unique_thread_count = _threads;
+    ConsistentHash(uint64_t* _partition_map, 
+                    uint64_t** _thread_map,
+                    uint64_t _threads, 
+                    uint64_t _partitions) {
+      this->partition_map = _partition_map;
+      this->thread_map = _thread_map;
+
+      this->num_partitions = _partitions;
+      this->num_threads = _threads;
+      this->unique_thread_count = _threads;
+
+      for (uint64_t i = 0; i < this->num_partitions; i++) {
+        this->partition_map[i] = i % this->num_threads;
+        this->thread_map[i % this->num_threads][(uint64_t) i / 64] |= (uint64_t)1 << (i % 64);
+      }
     }
+
+    // TODO: write destructor
 
     // hashes the key to get thread_id - 
     //  1. get virtual partition (key % num_partitions)
     //  2. get thread_id of partition from partition_map
-    uint64_t GetCCThread(CompositeKey& key);
+    uint64_t GetCCThread(CompositeKey& key) {
+      uint64_t hash = CompositeKey::Hash(&key);
+      return (uint64_t) this->partition_map[hash % this->num_partitions];
+    }
 
     // adds a new thread (id = unique_thread_count++) - returns thread_id if SUCCESS
     //  1. num_threads++;
@@ -34,7 +50,7 @@ class ConsistentHash {
 
   private:
     uint64_t num_threads;
-    uint64_t num_partitions;
+    uint64_t num_partitions = 1000;
 
     // count to assign thread id when adding threads
     uint64_t unique_thread_count;
@@ -43,7 +59,7 @@ class ConsistentHash {
     uint64_t* partition_map;
 
     // maps thread ids to virtual partitions (size: num_threads)
-    //  array of pointers to an array of the virtual paritions that thread is responsible for
+    //  array of pointers to an array of uint64_t's, enough so each vpartition gets a bit
     uint64_t** thread_map;
 }
 

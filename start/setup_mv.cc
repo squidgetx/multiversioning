@@ -2,6 +2,7 @@
 #include <common.h>
 #include <mv_action.h>
 #include <concurrent_queue.h>
+#include <consistent_hash.h>
 #include <preprocessor.h>
 #include <ppp.h>
 #include <executor.h>
