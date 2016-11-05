@@ -21,12 +21,14 @@ MVActionDistributor::MVActionDistributor(int cpuNumber,
     SimpleQueue<ActionBatch> *outputQueue,
     SimpleQueue<int> *orderInput,
     SimpleQueue<int> *orderOutput,
+    ConsistentHash* _shards,
     bool leader
 ): Runnable(cpuNumber) {
   this->inputQueue = inputQueue;
   this->outputQueue = outputQueue;
   this->orderingInputQueue = orderInput;
   this->orderingOutputQueue = orderOutput;
+  this->shards = _shards;
   // If this is the leader preprocessing thread (the first one),
   // pre-empt the input queue so that operation doesn't get blocked
   // on the first batch
@@ -42,7 +44,7 @@ MVActionDistributor::MVActionDistributor(int cpuNumber,
 uint32_t MVActionDistributor::GetCCThread(CompositeKey& key) 
 {
         uint64_t hash = CompositeKey::Hash(&key);
-        return (uint32_t)(hash % NUM_CC_THREADS);
+        return (uint32_t) shards->partition_map[hash % shards->num_partitions];
 }
 
 // Output to concurrency control layer:

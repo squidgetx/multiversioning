@@ -3,10 +3,7 @@
 
 class ConsistentHash {
   public:
-    // initializer - 
-    //  1. initialize variables
-    //  2. allocate partition_map and thread_map (done in setup_mv)
-    //  3. allocate each _partition in round robin format for threads
+    // initializer
     ConsistentHash(uint64_t* _partition_map, 
                     uint64_t** _thread_map,
                     uint64_t _threads, 
@@ -26,9 +23,7 @@ class ConsistentHash {
 
     // TODO: write destructor
 
-    // hashes the key to get thread_id - 
-    //  1. get virtual partition (key % num_partitions)
-    //  2. get thread_id of partition from partition_map
+    // hashes the key to get thread_id
     uint64_t GetCCThread(CompositeKey& key) {
       uint64_t hash = CompositeKey::Hash(&key);
       return (uint64_t) this->partition_map[hash % this->num_partitions];
@@ -48,12 +43,13 @@ class ConsistentHash {
     //      - set partition_map[p] = new_thread
     void removeThread(uint64_t thread_id);
 
-  private:
+  //private:
     uint64_t num_threads;
     uint64_t num_partitions = 1000;
 
     // count to assign thread id when adding threads
     uint64_t unique_thread_count;
+
 
     // maps virtual partitions to thread_ids (size: num_partitions)
     uint64_t* partition_map;

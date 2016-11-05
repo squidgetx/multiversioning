@@ -32,8 +32,9 @@ class MVActionDistributor : public Runnable {
     SimpleQueue<int> *orderingOutputQueue;
 
     SimpleQueue<ActionBatch> *inputQueue;
-
     SimpleQueue<ActionBatch> *outputQueue;
+
+    ConsistentHash *shards;
 
     static uint32_t GetCCThread(CompositeKey& key);
 
@@ -51,6 +52,7 @@ class MVActionDistributor : public Runnable {
         SimpleQueue<ActionBatch> *outputQueue,
         SimpleQueue<int> *orderInput,
         SimpleQueue<int> *orderOutput,
+        ConsistentHash* _shards,
         bool leader
     );
   static uint32_t NUM_CC_THREADS;

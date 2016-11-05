@@ -15,6 +15,7 @@
 #define OFFSET_CORE(x) (x+OFFSET)
 
 #define MV_DRY_RUNS 5
+#define PARTITIONS 1000
 
 static uint64_t dbSize = ((uint64_t)1<<36);
 extern uint32_t GLOBAL_RECORD_SIZE;
@@ -345,9 +346,17 @@ static SimpleQueue<T>* SetupQueuesMany(uint32_t numEntries, uint32_t numQueues, 
   return queues;
 }
 
-static MVActionDistributor** SetupPPPThreads(int numProcs,
+static MVActionDistributor** SetupPPPThreads(int numProcs, uint32_t numCCThreads,
                                              SimpleQueue<ActionBatch> ** inputRef,
                                              SimpleQueue<ActionBatch> ** outputRef) {
+  uint64_t* p_map = (uint64_t*) alloc_interleaved(sizeof(uint64_t) * PARTITIONS, 0, numProcs - 1) ; // partition_map
+  uint64_t** t_map = (uint64_t**) alloc_interleaved(sizeof(uint64_t*) * numCCThreads, 0, numProcs - 1); // thread_map
+  for (int h = 0; h < numCCThreads; h++) {
+    t_map[h] = (uint64_t*) alloc_interleaved(sizeof(uint64_t) * (PARTITIONS / 64), 0, numProcs - 1);
+    memset(t_map[h], 0x00, PARTITIONS / 8);
+  }
+  ConsistentHash *shards = new ConsistentHash(p_map, t_map, (uint64_t) numCCThreads, 1000);
+
   MVActionDistributor** procArray = 
     (MVActionDistributor**) alloc_mem(sizeof(MVScheduler*)*numProcs, 79);
 
@@ -376,7 +385,7 @@ static MVActionDistributor** SetupPPPThreads(int numProcs,
       link = new SimpleQueue<int>(mem, QSIZE);
       memset(mem, 0x00, CACHE_LINE*2*QSIZE);
     }
-    procArray[i] = new (cpuNum) MVActionDistributor(cpuNum, inputQueue, outputQueue, old_link, link, i == 0);
+    procArray[i] = new (cpuNum) MVActionDistributor(cpuNum, inputQueue, outputQueue, old_link, link, shards, i == 0);
     old_link = link;
   }
   return procArray;
@@ -755,7 +764,8 @@ static MVActionDistributor** setup_ppp_threads(MVConfig config,
 {
   int num_threads = config.numPPPThreads;
   MVActionDistributor **distributors;
-  distributors = SetupPPPThreads(num_threads, ppp_input, ppp_output);
+
+  distributors = SetupPPPThreads(num_threads, config.numCCThreads, ppp_input, ppp_output);
   return distributors;
 }
 

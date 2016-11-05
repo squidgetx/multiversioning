@@ -50,7 +50,6 @@ class MVScheduler : public Runnable {
     MVSchedulerConfig config;
     MVRecordAllocator *alloc;
 
-    ConsistentHash *shards;
     MVTablePartition **partitions;
 
     uint32_t epoch;
