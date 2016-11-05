@@ -6,6 +6,7 @@
 #include <mv_action.h>
 #include <runnable.hh>
 #include <concurrent_queue.h>
+#include <consistent_hash.h>
 #include <numa.h>
 #include <mv_table.h>
 
@@ -36,7 +37,7 @@ class MVActionDistributor : public Runnable {
 
     ConsistentHash *shards;
 
-    static uint32_t GetCCThread(CompositeKey& key);
+    uint32_t GetCCThread(CompositeKey& key);
 
   protected:
 

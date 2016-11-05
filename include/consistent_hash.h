@@ -24,7 +24,7 @@ class ConsistentHash {
     // TODO: write destructor
 
     // hashes the key to get thread_id
-    uint64_t GetCCThread(CompositeKey& key) {
+    uint64_t HashCCThread(CompositeKey& key) {
       uint64_t hash = CompositeKey::Hash(&key);
       return (uint64_t) this->partition_map[hash % this->num_partitions];
     }
@@ -57,6 +57,6 @@ class ConsistentHash {
     // maps thread ids to virtual partitions (size: num_threads)
     //  array of pointers to an array of uint64_t's, enough so each vpartition gets a bit
     uint64_t** thread_map;
-}
+};
 
 #endif
