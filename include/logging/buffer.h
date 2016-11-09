@@ -9,8 +9,9 @@
 #include <cstddef>
 #include <exception>
 #include <limits>
-#include <vector>
+#include <sys/uio.h>
 #include <type_traits>
+#include <vector>
 
 #include "no_copy.h"
 
@@ -73,15 +74,20 @@ protected:
                                    std::size_t nBytes) = 0;
 };
 
-struct Region {
+struct Region : public iovec {
     Region(unsigned char *data, std::size_t size)
-        : data(data), size(size) {};
+        : iovec{data, size} {};
 
-    unsigned char *data;
-    std::size_t size;
+    unsigned char* data() const {
+        return static_cast<unsigned char*>(iov_base);
+    }
+
+    std::size_t size() const {
+        return iov_len;
+    }
 
     unsigned char* end() const {
-        return data + size;
+        return static_cast<unsigned char*>(iov_base) + size();
     }
 
     std::size_t remaining(unsigned char *ptr) const {
@@ -128,6 +134,8 @@ public:
 
     /**
      * Write the entire buffer to 'fd'.
+     *
+     * The contents of the buffer remain after writing.
      */
     void writeToFile(int fd);
 
@@ -157,6 +165,7 @@ private:
     unsigned char *writePtr = nullptr;
     std::size_t currentRegion = 0;
     const std::size_t PAGE_SIZE;
+    std::size_t totalBytes = 0;
 };
 
 /**

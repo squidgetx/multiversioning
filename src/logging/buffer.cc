@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstring>
 #include <sys/mman.h>
+#include <sys/uio.h>
 #include <unistd.h>
 #include <iostream>
 #include <vector>
@@ -12,7 +13,7 @@ Buffer::Buffer() : PAGE_SIZE(getpagesize()) {
 
 Buffer::~Buffer() {
     for (auto &&region : regions) {
-        munmap(region.data, region.size);
+        munmap(region.data(), region.size());
     }
 }
 
@@ -32,12 +33,28 @@ std::size_t Buffer::writeBytes(const unsigned char* bytes, std::size_t len) {
 
         writePtr += toCopy;
         remaining -= toCopy;
+        totalBytes += toCopy;
         if (writePtr == region.end()) {
             newRegion();
         }
     }
 
     return len;
+}
+
+
+void Buffer::writeToFile(int fd) {
+    std::size_t written = 0;
+    while (written < totalBytes) {
+        std::size_t write_count = writev(fd, regions.data(), regions.size());
+        if (static_cast<int>(write_count) == -1) {
+            std::cerr << "Fatal error: Buffer::writeToFile cannot write. "
+                      << strerror(errno)
+                      << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        written += write_count;
+    }
 }
 
 void Buffer::newRegion() {
@@ -55,7 +72,7 @@ void Buffer::newRegion() {
 
                          PAGE_SIZE);
     currentRegion = regions.size() - 1;
-    writePtr = regions[currentRegion].data;
+    writePtr = regions[currentRegion].data();
 }
 
 BufferReservation Buffer::reserve(std::size_t reserved) {
@@ -74,6 +91,7 @@ BufferReservation Buffer::reserve(std::size_t reserved) {
 
         writePtr += toReserve;
         reserved -= toReserve;
+        totalBytes += toReserve;
         if (writePtr == region.end()) {
             newRegion();
         }
@@ -92,7 +110,7 @@ BufferReservation::BufferReservation(std::vector<Region>&& regions)
     }
 
     for (const auto& region : regions) {
-        reservationRemaining += region.size;
+        reservationRemaining += region.size();
     }
 }
 
@@ -125,7 +143,7 @@ std::size_t BufferReservation::writeBytes(const unsigned char* data,
                 return nBytes - remaining;
             }
 
-            writePtr = regions[currentRegion].data;
+            writePtr = regions[currentRegion].data();
         }
     }
 

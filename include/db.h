@@ -6,6 +6,7 @@
 #include <city.h>
 
 #include "logging/buffer.h"
+#include "txn_type.h"
 
 class txn;
 
@@ -116,7 +117,13 @@ class txn {
         void set_translator(translator *trans);
 
         // Serialize the transaction into the buffer.
-        void serialize(IBuffer *buffer);
+        virtual void serialize(IBuffer *buffer) = 0;
+
+        // Return a constant representing this transactions type, for
+        // serialization.
+        //
+        // *Note* This MUST be unique across transaction implementations.
+        virtual TxnType type() const = 0;
 };
 
 

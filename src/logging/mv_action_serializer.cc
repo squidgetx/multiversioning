@@ -6,7 +6,7 @@
 
 void MVActionSerializer::serialize(const mv_action *action, Buffer* buffer) {
     // Write Txn Type.
-    buffer->write(static_cast<uint32_t>(action->t->type));
+    buffer->write(static_cast<uint32_t>(action->t->type()));
 
     BufferReservation reservation{buffer->reserve(sizeof(uint64_t))};
     CountedBuffer txnBuffer(buffer);

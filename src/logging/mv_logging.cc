@@ -42,7 +42,7 @@ void MVLogging::StartWorking() {
 
         // Serialize batch.
         Buffer batchBuf;
-        logBatch(batch, batchBuf);
+        logBatch(batch, &batchBuf);
 
         // Output batch.
         outputQueue->EnqueueBlocking(batch);
