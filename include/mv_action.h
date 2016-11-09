@@ -173,7 +173,7 @@ using namespace std;
 
 class mv_action : public translator {
         friend class Executor;
-        
+        friend class MVActionSerializer;
  private:
         mv_action(const mv_action&);
         mv_action& operator=(const mv_action&);

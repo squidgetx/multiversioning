@@ -6,11 +6,11 @@ CXX=g++
 LIBPATH=./libs/lib/
 INC_DIRS=include libs/include
 INCLUDE=$(foreach d, $(INC_DIRS), -I$d)
-SRC=src
-SOURCES:=$(wildcard $(SRC)/*.cc $(SRC)/*.c)
+SRC_DIRS=src src/logging
+SOURCES:=$(foreach d, $(SRC_DIRS), $(wildcard $(d)/*.cc $(d)/*.c))
 HEKATON:=$(wildcard $(SRC)/hek*.cc $(SRC)/hek*.c)
 HEK_OBJ:=$(patsubst $(SRC)/%.cc,build/%.o,$(HEKATON))
-OBJECTS:=$(patsubst $(SRC)/%.cc,build/%.o,$(SOURCES))
+OBJECTS:=$(patsubst src/%.cc,build/%.o,$(SOURCES))
 START:=$(wildcard start/*.cc start/*.c)
 START_OBJECTS:=$(patsubst start/%.cc,start/%.o,$(START))
 TEST:=test
@@ -29,7 +29,7 @@ all:env build/db
 test:CFLAGS+=-DTESTING=1 -DUSE_BACKOFF=1 
 test:env build/tests
 
--include $(wildcard $(DEPSDIR)/*.d)
+-include $(wildcard $(DEPSDIR)/*.d) $(wildcard $(DEPSDIR/logging/*.d))
 
 build/%.o: src/%.cc $(DEPSDIR)/stamp GNUmakefile
 	@mkdir -p build
@@ -57,6 +57,9 @@ $(DEPSDIR)/stamp:
 	@touch $@
 
 .PHONY: clean env
+
+env:
+	@mkdir -p $(DEPSDIR) $(DEPSDIR)/logging build/logging
 
 clean:
 	rm -rf build $(DEPSDIR) $(TESTOBJECTS) start/*.o

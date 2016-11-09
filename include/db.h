@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <city.h>
 
+#include "logging/buffer.h"
+
 class txn;
 
 struct big_key {
@@ -112,6 +114,9 @@ class txn {
         virtual void get_writes(struct big_key *array);
         virtual void get_rmws(struct big_key *array);
         void set_translator(translator *trans);
+
+        // Serialize the transaction into the buffer.
+        void serialize(IBuffer *buffer);
 };
 
 
