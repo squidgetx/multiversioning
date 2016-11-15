@@ -4,13 +4,13 @@
  * Author: David Hatch
  */
 
+#ifndef _LOGGING_READ_BUFFER_H
+#define _LOGGING_READ_BUFFER_H
+
 #include <cstddef>
 #include <type_traits>
 
 #include "no_copy.h"
-
-#ifndef _LOGGING_READ_BUFFER_H
-#define _LOGGING_READ_BUFFER_H
 
 class IReadBuffer {
     DISALLOW_COPY(IReadBuffer);
