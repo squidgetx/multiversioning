@@ -1,5 +1,5 @@
 /*
- * buffer.h: A memory buffer.
+ * buffer.h: Buffer abstractions for writing.
  */
 
 #ifndef _LOGGING_BUFFER_H
@@ -27,6 +27,8 @@ public:
     IBuffer() = default;
     // Allow implmentations to be movable.
     IBuffer(IBuffer&& other) = default;
+
+    virtual ~IBuffer() = default;
 
     /**
      * Write 'data' to the buffer.'
@@ -130,7 +132,7 @@ class Buffer : public IBuffer {
     DISALLOW_COPY(Buffer);
 public:
     Buffer();
-    ~Buffer();
+    virtual ~Buffer();
 
     /**
      * Write the entire buffer to 'fd'.
