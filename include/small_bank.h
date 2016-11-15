@@ -34,6 +34,10 @@ namespace SmallBank {
                 virtual bool Run();
                 virtual uint32_t num_writes();
                 virtual void get_writes(struct big_key *array);
+
+                virtual TxnType type() const override {
+                  return TxnType::SB_LOAD_CUSTOMER_RANGE;
+                }
         };
         
         class Balance : public txn {
@@ -45,6 +49,10 @@ namespace SmallBank {
                 virtual bool Run();
                 virtual uint32_t num_reads();
                 virtual void get_reads(struct big_key *array);
+
+                virtual TxnType type() const override {
+                  return TxnType::SB_BALANCE:
+                }
         };
 
         class DepositChecking : public txn {
@@ -57,6 +65,10 @@ namespace SmallBank {
                 virtual bool Run();
                 virtual uint32_t num_rmws();
                 virtual void get_rmws(struct big_key *array);
+
+                virtual TxnType type() const override {
+                  return TxnType::SB_DEPOSIT_CHECKING;
+                }
         };
 
         class TransactSaving : public txn {    
@@ -69,6 +81,10 @@ namespace SmallBank {
                 virtual bool Run();
                 virtual uint32_t num_rmws();
                 virtual void get_rmws(struct big_key *array);
+
+                virtual TxnType type() const override {
+                  return TxnType::SB_TRANSACT_SAVING;
+                }
         };
 
         class Amalgamate : public txn {
@@ -80,6 +96,10 @@ namespace SmallBank {
                 virtual bool Run();
                 virtual uint32_t num_rmws();
                 virtual void get_rmws(struct big_key *array);
+
+                virtual TxnType type() const override {
+                  return TxnType::SB_AMALGAMATE;
+                }
         };
   
         class WriteCheck : public txn {
@@ -94,6 +114,10 @@ namespace SmallBank {
                 virtual uint32_t num_rmws();
                 virtual void get_reads(struct big_key *array);
                 virtual void get_rmws(struct big_key *array);
+
+                virtual TxnType type() const override {
+                  return TxnType::SB_WRITE_CHECK;
+                }
         };  
 };
 
