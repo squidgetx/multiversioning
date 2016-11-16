@@ -5,6 +5,7 @@
 #include <cstdlib>
 
 #include <db.h>
+#include <logging/buffer.h>
 #include <mv_action.h>
 #include <occ_action.h>
 #include <action.h>
@@ -25,6 +26,9 @@ namespace SmallBank {
 
         class LoadCustomerRange : public txn {
         private:
+                const uint64_t _customer_start;
+                const uint64_t _customer_end;
+
                 std::vector<long> balances;
                 std::vector<uint64_t> customers;
                 
@@ -34,6 +38,8 @@ namespace SmallBank {
                 virtual bool Run();
                 virtual uint32_t num_writes();
                 virtual void get_writes(struct big_key *array);
+
+                virtual void serialize(IBuffer *buffer);
 
                 virtual TxnType type() const override {
                   return TxnType::SB_LOAD_CUSTOMER_RANGE;
@@ -50,8 +56,10 @@ namespace SmallBank {
                 virtual uint32_t num_reads();
                 virtual void get_reads(struct big_key *array);
 
+                virtual void serialize(IBuffer *) {};
+
                 virtual TxnType type() const override {
-                  return TxnType::SB_BALANCE:
+                  return TxnType::SB_BALANCE;
                 }
         };
 
@@ -65,6 +73,8 @@ namespace SmallBank {
                 virtual bool Run();
                 virtual uint32_t num_rmws();
                 virtual void get_rmws(struct big_key *array);
+
+                virtual void serialize(IBuffer *buffer);
 
                 virtual TxnType type() const override {
                   return TxnType::SB_DEPOSIT_CHECKING;
@@ -82,6 +92,7 @@ namespace SmallBank {
                 virtual uint32_t num_rmws();
                 virtual void get_rmws(struct big_key *array);
 
+                virtual void serialize(IBuffer *buffer);
                 virtual TxnType type() const override {
                   return TxnType::SB_TRANSACT_SAVING;
                 }
@@ -97,6 +108,7 @@ namespace SmallBank {
                 virtual uint32_t num_rmws();
                 virtual void get_rmws(struct big_key *array);
 
+                virtual void serialize(IBuffer *buffer);
                 virtual TxnType type() const override {
                   return TxnType::SB_AMALGAMATE;
                 }
@@ -115,6 +127,7 @@ namespace SmallBank {
                 virtual void get_reads(struct big_key *array);
                 virtual void get_rmws(struct big_key *array);
 
+                virtual void serialize(IBuffer *buffer);
                 virtual TxnType type() const override {
                   return TxnType::SB_WRITE_CHECK;
                 }

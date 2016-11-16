@@ -117,6 +117,11 @@ class txn {
         void set_translator(translator *trans);
 
         // Serialize the transaction into the buffer.
+        //
+        // Note: For readonly transactions, this can be an empty
+        // implementation.  They will not be serialized to the log.
+        //
+        // It should invariant(false) if called.
         virtual void serialize(IBuffer *buffer) = 0;
 
         // Return a constant representing this transactions type, for

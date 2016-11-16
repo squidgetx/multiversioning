@@ -40,12 +40,12 @@ void MVLogging::StartWorking() {
     while (true) {
         ActionBatch batch = inputQueue->DequeueBlocking();
 
+        // Output batch.
+        outputQueue->EnqueueBlocking(batch);
+
         // Serialize batch.
         Buffer batchBuf;
         logBatch(batch, &batchBuf);
-
-        // Output batch.
-        outputQueue->EnqueueBlocking(batch);
 
         // Write to file.
         batchBuf.writeToFile(logFileFd);

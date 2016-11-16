@@ -25,9 +25,6 @@ class IBuffer {
     friend class BufferProxy;
 public:
     IBuffer() = default;
-    // Allow implmentations to be movable.
-    IBuffer(IBuffer&& other) = default;
-
     virtual ~IBuffer() = default;
 
     /**
@@ -65,7 +62,7 @@ public:
      *
      * If the buffer is unbounded, returns std::numeric_limits<size_t>::max.
      */
-    virtual std::size_t remaining();
+    virtual std::size_t remaining() = 0;
 protected:
     /**
      * Write bytes to the buffer.
@@ -132,6 +129,8 @@ class Buffer : public IBuffer {
     DISALLOW_COPY(Buffer);
 public:
     Buffer();
+    Buffer(Buffer&& other) = default;
+
     virtual ~Buffer();
 
     /**

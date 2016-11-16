@@ -2,6 +2,7 @@
 #define YCSB_H_
 
 #include <db.h>
+#include <logging/buffer.h>
 #include <vector>
 
 #define YCSB_RECORD_SIZE 1000
@@ -21,6 +22,7 @@ class ycsb_insert : public txn {
         virtual uint32_t num_writes();
         virtual void get_writes(struct big_key *array);
 
+        virtual void serialize(IBuffer *buffer);
         virtual TxnType type() const override {
                 return TxnType::YCSB_INSERT;
         }
@@ -36,6 +38,7 @@ class ycsb_readonly : public txn {
         virtual uint32_t num_reads();
         virtual void get_reads(struct big_key *array);
 
+        virtual void serialize(IBuffer *) {};
         virtual TxnType type() const override {
                 return TxnType::YCSB_READONLY;
         }
@@ -54,6 +57,7 @@ class ycsb_rmw : public txn {
         virtual void get_reads(struct big_key *array);
         virtual void get_rmws(struct big_key *array);
 
+        virtual void serialize(IBuffer *buffer);
         virtual TxnType type() const override {
                 return TxnType::YCSB_RMW;
         }
