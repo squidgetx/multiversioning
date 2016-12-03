@@ -5,6 +5,7 @@
 #include <preprocessor.h>
 #include <scheduler.h>
 #include <logging/mv_logging.h>
+#include <mv_action_batch_factory.h>
 #include <executor.h>
 #include <iostream>
 #include <fstream>
@@ -513,132 +514,18 @@ static uint32_t get_num_epochs(MVConfig config)
         return num_epochs;
 }
 
-/*
- * Pre-process each txn's read- and write-sets. 
- * 
- * XXX Ideally, this should happen _online_, and "route" transactions to the
- * appropriate concurrency control threads, but we're doing it offline because 
- * it's good enough for experiments.
- *
- * Basically, make a linked list where the starts vector is of size NUM_CC_THREADS
- * vector[i] tells you the first index in the vector of composite keys that is for thread i
- * and each composite key has an int field 'next' that points to the next key for thread i
- *
- * So do we want to just move this to an outer layer? and the prepreprocessor just does this step
- * and then puts the txn in the appropriate output Qs (sending it to multiple CC threads, but only the relevant ones)
- * Instead of sending composite keys..
- *
- * Do we have issue with changing concurrency threads
- *
- * OK new idea... send batches of write/read actions to the concurrency control layer. each batch also has the batch of txns
- * in total order. I mean, the write/read actions could even be associated with the txn object, who cares.Then the concurrency
- * layer can output the associated batch of txn objects to the execution layer.
- *
- *
- */
-/*
-static void do_preprocessing(vector<CompositeKey> &keys, vector<int> &starts)
-{
-        CompositeKey mv_key;
-        int indices[NUM_CC_THREADS], index, *ptr;
-        uint32_t i, num_keys;
-        for (i = 0; i < NUM_CC_THREADS; ++i)
-                indices[i] = -1;
-        num_keys = keys.size();
-        for (i = 0; i < num_keys; ++i) {
-                mv_key = keys[i];
-                if (indices[mv_key.threadId] != -1) {
-                  // If this key's thread ID is found
-                        index = indices[mv_key.threadId];
-                  // Look in the list of keys at that index
-                  // Assign ptr to the next field of that 
-                        ptr = &keys[index].next;
-                } else {
-                  // If it wasn't found, then put i in the starts vector
-                        ptr = &starts[mv_key.threadId];
-                }
-                indices[mv_key.threadId] = i;
-                *ptr = i;
-        }
-}*/
-
-static void convert_keys(mv_action *action, txn *txn)
-{
-        uint32_t i, num_reads, num_rmws, num_writes, num_entries;
-        struct big_key *array;
-
-        /* Alloc an array to poke txn information. */
-        num_reads = txn->num_reads();
-        num_rmws = txn->num_rmws();
-        num_writes = txn->num_writes();
-        if (num_reads >= num_rmws && num_reads >= num_writes) 
-                num_entries = num_reads;
-        else if (num_rmws >= num_writes) 
-                num_entries = num_rmws;
-        else 
-                num_entries = num_writes;
-        array = (struct big_key*)malloc(sizeof(struct big_key)*num_entries);
-                
-        /* Handle writes. */
-        txn->get_writes(array);
-        for (i = 0; i < num_writes; ++i)
-                action->add_write_key(array[i].table_id, array[i].key, false);
-
-        /* Handle rmws. */
-        txn->get_rmws(array);
-        for (i = 0; i < num_rmws; ++i)
-                action->add_write_key(array[i].table_id, array[i].key, true);
-        
-        /* Handle reads. */
-        txn->get_reads(array);
-        for (i = 0; i < num_reads; ++i)
-                action->add_read_key(array[i].table_id, array[i].key);
-        if (num_rmws == 0 && num_writes == 0)
-                action->__readonly = true;
-        free(array);
-}
-
-static mv_action* generate_mv_action(txn *txn)
-{
-        mv_action *action;
-
-        /* Get the transaction's rw-sets. */
-        action = new mv_action(txn);
-        txn->set_translator(action);
-        convert_keys(action, txn);
-
-        /* 
-         * Pre-process rw-sets for more concurrency control phase parallelism. 
-         */
-        /*
-        do_preprocessing(action->__writeset, action->__write_starts);
-        do_preprocessing(action->__readset, action->__read_starts);
-        */
-        action->setup_reverse_index();
-        return action;        
-}
-
 static ActionBatch mv_create_action_batch(MVConfig config,
                                           workload_config w_config,
                                           uint32_t epoch)
 {
-        ActionBatch batch;
-        mv_action *action;
+        MVActionBatchFactory batchFactory{epoch, config.epochSize};
         txn *txn;
-        uint32_t i;
-        uint64_t timestamp;
-        batch.numActions = config.epochSize;
-        batch.actionBuf =
-                (mv_action**)malloc(sizeof(mv_action*)*config.epochSize);
-        assert(batch.actionBuf != NULL);
-        for (i = 0; i < config.epochSize; ++i) {
-                timestamp = CREATE_MV_TIMESTAMP(epoch, i);
+        while (!batchFactory.full()) {
                 txn = generate_transaction(w_config);
-                action = generate_mv_action(txn);
-                action->__version = timestamp;
-                batch.actionBuf[i] = action;
+                batchFactory.addTransaction(txn);
         }
-        return batch;
+
+        return batchFactory.getBatch();
 }
 
 static void mv_setup_input_array(std::vector<ActionBatch> *input,
@@ -659,24 +546,20 @@ static void mv_setup_input_array(std::vector<ActionBatch> *input,
 static ActionBatch generate_db(workload_config conf)
 {
         txn **loader_txns;
-        uint32_t num_txns, i;
-        ActionBatch ret;
-
-        uint64_t timestamp;
+        uint64_t num_txns, i;
 
         loader_txns = NULL;
         num_txns = generate_input(conf, &loader_txns);
         assert(loader_txns != NULL);
-        ret.numActions = num_txns;
-        ret.actionBuf = (mv_action**)malloc(sizeof(mv_action*)*num_txns);
-        for (i = 0; i < num_txns; ++i) {
-                ret.actionBuf[i] = generate_mv_action(loader_txns[i]);
-                timestamp = CREATE_MV_TIMESTAMP(1, i);
-                ret.actionBuf[i]->__version = timestamp;
+
+        MVActionBatchFactory batchFactory{1, num_txns};
+        for (i = 0; i < num_txns; i++) {
+                assert(!batchFactory.full());
+                batchFactory.addTransaction(loader_txns[i]);
         }
-        return ret;
+        return batchFactory.getBatch();
 }
- 
+
 static void write_results(MVConfig config, timespec elapsed_time)
 {
         uint32_t num_epochs;
