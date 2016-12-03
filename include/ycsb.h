@@ -5,6 +5,8 @@
 #include <logging/buffer.h>
 #include <vector>
 
+#include <assert.h>
+
 #define YCSB_RECORD_SIZE 1000
 
 using namespace std;
@@ -38,7 +40,7 @@ class ycsb_readonly : public txn {
         virtual uint32_t num_reads();
         virtual void get_reads(struct big_key *array);
 
-        virtual void serialize(IBuffer *) {};
+        virtual void serialize(IBuffer *) { assert(false); };
         virtual TxnType type() const override {
                 return TxnType::YCSB_READONLY;
         }

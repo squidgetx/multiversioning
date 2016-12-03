@@ -56,6 +56,9 @@ void MVLogging::StartWorking() {
 }
 
 void MVLogging::logAction(const mv_action *action, Buffer* buffer) {
+    if (action->__readonly)
+        return;
+
     MVActionSerializer serializer;
     serializer.serialize(action, buffer);
 }

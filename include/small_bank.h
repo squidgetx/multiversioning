@@ -10,6 +10,8 @@
 #include <occ_action.h>
 #include <action.h>
 
+#include <assert.h>
+
 #define METADATA_SIZE 0
 
 enum SmallBankTable {
@@ -56,7 +58,7 @@ namespace SmallBank {
                 virtual uint32_t num_reads();
                 virtual void get_reads(struct big_key *array);
 
-                virtual void serialize(IBuffer *) {};
+                virtual void serialize(IBuffer *) { assert(false) };
 
                 virtual TxnType type() const override {
                   return TxnType::SB_BALANCE;
