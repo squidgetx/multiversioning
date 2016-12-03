@@ -15,16 +15,9 @@
 
 MVLogging::MVLogging(SimpleQueue<ActionBatch> *inputQueue,
                      SimpleQueue<ActionBatch> *outputQueue,
+                     const char* logFileName,
                      int cpuNumber) :
     Runnable(cpuNumber), inputQueue(inputQueue), outputQueue(outputQueue) {
-    logFileFd = open("log.mvlog", O_DIRECT | O_DSYNC);
-    if (logFileFd == -1) {
-        // TODO is there some kind of existing error handling.
-        std::cerr << "Fatal error: failed to open log file."
-                  << strerror(errno)
-                  << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
 }
 
 MVLogging::~MVLogging() {
@@ -34,6 +27,14 @@ MVLogging::~MVLogging() {
 }
 
 void MVLogging::Init() {
+    logFileFd = open("log.mvlog", O_DIRECT | O_DSYNC | O_CREAT | O_APPEND);
+    if (logFileFd == -1) {
+        // TODO is there some kind of existing error handling.
+        std::cerr << "Fatal error: failed to open log file."
+                  << strerror(errno)
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
 }
 
 void MVLogging::StartWorking() {
@@ -44,6 +45,7 @@ void MVLogging::StartWorking() {
         outputQueue->EnqueueBlocking(batch);
 
         // Serialize batch.
+        // TODO Make sure batch isn't deallocated before writing to log.
         Buffer batchBuf;
         logBatch(batch, &batchBuf);
 
