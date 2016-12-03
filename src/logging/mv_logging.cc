@@ -17,7 +17,7 @@ MVLogging::MVLogging(SimpleQueue<ActionBatch> *inputQueue,
                      SimpleQueue<ActionBatch> *outputQueue,
                      const char* logFileName,
                      int cpuNumber) :
-    Runnable(cpuNumber), inputQueue(inputQueue), outputQueue(outputQueue) {
+    Runnable(cpuNumber), inputQueue(inputQueue), outputQueue(outputQueue), logFileName(logFileName) {
 }
 
 MVLogging::~MVLogging() {
@@ -27,10 +27,11 @@ MVLogging::~MVLogging() {
 }
 
 void MVLogging::Init() {
-    logFileFd = open("log.mvlog", O_DIRECT | O_DSYNC | O_CREAT | O_APPEND);
+    logFileFd = open(logFileName, O_CREAT | O_APPEND | O_WRONLY | O_DSYNC,
+                     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (logFileFd == -1) {
         // TODO is there some kind of existing error handling.
-        std::cerr << "Fatal error: failed to open log file."
+        std::cerr << "Fatal error: failed to open log file. Reason: "
                   << strerror(errno)
                   << std::endl;
         std::exit(EXIT_FAILURE);

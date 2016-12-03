@@ -165,7 +165,7 @@ private:
 
     unsigned char *writePtr = nullptr;
     std::size_t currentRegion = 0;
-    const std::size_t PAGE_SIZE;
+    const std::size_t page_size;
     std::size_t totalBytes = 0;
 };
 

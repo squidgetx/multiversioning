@@ -8,7 +8,7 @@
 #include <iostream>
 #include <vector>
 
-Buffer::Buffer() : PAGE_SIZE(getpagesize()) {
+Buffer::Buffer() : page_size(getpagesize()) {
 }
 
 Buffer::~Buffer() {
@@ -59,18 +59,17 @@ void Buffer::writeToFile(int fd) {
 
 void Buffer::newRegion() {
     // TODO faster, core local memory allocation.
-    void* regionData = mmap(nullptr, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                            MAP_ANONYMOUS, 0, 0);
+    void* regionData = mmap(nullptr, page_size, PROT_READ | PROT_WRITE,
+                            MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (regionData == MAP_FAILED) {
-        std::cerr << "Fatal error: newRegion cannot allocate. "
+        std::cerr << "Fatal error: newRegion cannot allocate. Reason: "
                   << strerror(errno)
                   << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
     regions.emplace_back(reinterpret_cast<unsigned char*>(regionData),
-
-                         PAGE_SIZE);
+                         page_size);
     currentRegion = regions.size() - 1;
     writePtr = regions[currentRegion].data();
 }

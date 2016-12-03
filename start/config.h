@@ -27,8 +27,9 @@ static struct option long_options[] = {
   {"occ_epoch", required_argument, NULL, 13},
   {"read_pct", required_argument, NULL, 14},
   {"read_txn_size", required_argument, NULL, 15},
-  {"hot_position", required_argument, NULL, 16},  
+  {"hot_position", required_argument, NULL, 16},
   {"num_ppp_threads", required_argument, NULL, 17},
+  {"log_file", required_argument, NULL, 18},
   {NULL, no_argument, NULL, 18},
 };
 
@@ -114,6 +115,8 @@ struct MVConfig {
   uint32_t experiment;
   uint64_t recordSize;
   uint32_t distribution;
+  bool loggingEnabled;
+  const char* logFileName;
   double theta;
         int read_pct;
         int read_txn_size;
@@ -141,6 +144,7 @@ class ExperimentConfig {
     READ_TXN_SIZE,
     HOT_POSITION,
     NUM_PPP_THREADS
+    LOG_FILE,
   };
   unordered_map<int, char*> argMap;
 
@@ -217,6 +221,11 @@ class ExperimentConfig {
       mvConfig.distribution = (uint32_t)atoi(argMap[DISTRIBUTION]);
       mvConfig.read_pct = (int)atoi(argMap[READ_PCT]);
       mvConfig.read_txn_size = (int)atoi(argMap[READ_TXN_SIZE]);
+
+      if (argMap.count(LOG_FILE) > 0) {
+        mvConfig.loggingEnabled = true;
+        mvConfig.logFileName = argMap[LOG_FILE];
+      }
       
       if (argMap.count(THETA) > 0) {
         mvConfig.theta = (double)atof(argMap[THETA]);

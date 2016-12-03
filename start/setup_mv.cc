@@ -4,6 +4,7 @@
 #include <concurrent_queue.h>
 #include <preprocessor.h>
 #include <scheduler.h>
+#include <logging/mv_logging.h>
 #include <executor.h>
 #include <iostream>
 #include <fstream>
@@ -323,7 +324,14 @@ static Executor** SetupExecutors(uint32_t cpuStart,
   return execs;
 }
 
-// Setup an array of queues.
+/** Setup an array of SimpleQueues of data type 'T'.
+ *
+ * 'numQueues' will be created, with their memory pinned to 'cpu'.
+ *
+ * Each queue will be able to hold 'numEntires' entries.
+ *
+ * Returns: An array of length 'numQueues' containing the allocated queues.
+ */
 template<class T>
 static SimpleQueue<T>* SetupQueuesMany(uint32_t numEntries, uint32_t numQueues, int cpu) {
   size_t metaDataSz = sizeof(SimpleQueue<T>)*numQueues; // SimpleQueue structs
@@ -474,6 +482,26 @@ static MVScheduler** SetupSchedulers(uint32_t cpuStart,
   *outputQueueRefs_OUT = leaderOutputQueues;
   return schedArray;
 }
+
+static MVLogging* SetupLogging(MVConfig config,
+                               SimpleQueue<ActionBatch> **inputQueue_OUT,
+                               SimpleQueue<ActionBatch> *outputQueue) {
+        // Allocate logging input queue.
+        char *inputArray = (char*)alloc_mem(CACHE_LINE*INPUT_SIZE, 0);
+        SimpleQueue<ActionBatch> *loggingInputQueue =
+                new SimpleQueue<ActionBatch>(inputArray, INPUT_SIZE);
+
+        MVLogging *logging = new MVLogging(loggingInputQueue,
+                                           outputQueue,
+                                           config.logFileName,
+                                           config.numCCThreads + config.numWorkerThreads);
+
+        *inputQueue_OUT = loggingInputQueue;
+
+        std::cerr << "Done setting up logging!" << std::endl;
+        return logging;
+}
+
 
 static uint32_t get_num_epochs(MVConfig config)
 {
@@ -727,6 +755,7 @@ static void init_database(MVConfig config,
                           SimpleQueue<ActionBatch> *input_queue,
                           SimpleQueue<ActionBatch> *output_queue,
                           MVActionDistributor **ppp_threads,
+                          MVLogging *logging_thread,
                           MVScheduler **sched_threads,
                           Executor **exec_threads)
                           
@@ -742,6 +771,12 @@ static void init_database(MVConfig config,
         }
 
         init_batch = generate_db(w_conf);
+
+        if (logging_thread) {
+                logging_thread->Run();
+                logging_thread->WaitInit();
+        }
+
         for (i = 0; i < config.numCCThreads; ++i) {
                 sched_threads[i]->Run();        
                 sched_threads[i]->WaitInit();
@@ -825,17 +860,34 @@ static Executor** setup_executors(MVConfig config,
         return execs;
 }
 
+/**
+ * The entry point for any multiversioning experiment.
+ */
 void do_mv_experiment(MVConfig mv_config, workload_config w_config)
 {
+        MVLogging *loggingThread = nullptr;
         MVActionDistributor **pppThreads;
         MVScheduler **schedThreads;
         Executor **execThreads;
-        SimpleQueue<ActionBatch> *schedOutputQueues;
+
+        // The input queue for the logging thread.
+        SimpleQueue<ActionBatch> *loggingInputQueue = nullptr;
+
+        // The input/output queue for the preprocessing layer
         SimpleQueue<ActionBatch> *pppInputQueue;
         SimpleQueue<ActionBatch> *pppOutputQueue;
-        
+
+        // An array of scheduler output queues (the leader's output queues).
+        SimpleQueue<ActionBatch> *schedOutputQueues;
+
+        // Garbage collection queues.
         SimpleQueue<MVRecordList> **schedGCQueues[mv_config.numCCThreads];
+
+        // The execution layer output queues.  There is one output queue for each
+        // executor thread.
         SimpleQueue<ActionBatch> *outputQueue;
+
+        // The input batches which will be submitted to run the experiment.
         std::vector<ActionBatch> input_placeholder;
         timespec elapsed_time;
 
@@ -849,6 +901,7 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
                 GLOBAL_RECORD_SIZE = 1000;
         else
                 GLOBAL_RECORD_SIZE = 8;
+
         MVScheduler::NUM_CC_THREADS = (uint32_t)mv_config.numCCThreads;
         NUM_CC_THREADS = (uint32_t)mv_config.numCCThreads;
         assert(mv_config.distribution < 2);
@@ -858,8 +911,6 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
         schedThreads = setup_scheduler_threads(mv_config, pppOutputQueue,
                                                &schedOutputQueues,
                                                schedGCQueues);
-
-        mv_setup_input_array(&input_placeholder, mv_config, w_config);
 
         // If this line is moved to line 929 (before setup_ppp_threads)
         // the output queues are set to null value..??
@@ -871,11 +922,22 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
         execThreads = setup_executors(mv_config, schedOutputQueues, outputQueue,
                                       schedGCQueues);
 
-        init_database(mv_config, w_config, pppInputQueue, outputQueue,
-                      pppThreads, schedThreads, execThreads);
+        // The overall input queue for the system.
+        SimpleQueue<ActionBatch> *systemInputQueue = pppInputQueue;
+        if (mv_config.loggingEnabled) {
+                loggingThread = SetupLogging(mv_config, &loggingInputQueue,
+                                             schedInputQueue);
+                systemInputQueue = loggingInputQueue;
+        }
+
+        // Execute the initial transactions needed to load experiment data
+        // into the database.
+        init_database(mv_config, w_config, systemInputQueue, outputQueue,
+                      loggingThread, schedThreads, execThreads);
 
         pin_memory();
-        elapsed_time = run_experiment(pppInputQueue,  //&schedOutputQueues[config.numWorkerThreads],
+
+        elapsed_time = run_experiment(systemInputQueue,
                                       outputQueue,
                                       input_placeholder,// 1);
                                       mv_config.numWorkerThreads);

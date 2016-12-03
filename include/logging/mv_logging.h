@@ -22,6 +22,7 @@ class MVLogging : public Runnable {
 public:
     MVLogging(SimpleQueue<ActionBatch> *inputQueue,
               SimpleQueue<ActionBatch> *outputQueue,
+              const char* logFileName,
               int cpuNumber);
 
     ~MVLogging();
@@ -36,5 +37,6 @@ private:
     SimpleQueue<ActionBatch> *inputQueue;
     SimpleQueue<ActionBatch> *outputQueue;
 
+    const char* logFileName;
     int logFileFd;
 };
