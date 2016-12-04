@@ -20,23 +20,41 @@
 class MVLogging : public Runnable {
     DISALLOW_COPY(MVLogging);
 public:
+    /**
+     * Initialize MVlogging.
+     *
+     * allowRestore: If true, restore from log file on startup.
+     *
+     * Otherwise refuse to start if the file exists.
+     */
     MVLogging(SimpleQueue<ActionBatch> *inputQueue,
               SimpleQueue<ActionBatch> *outputQueue,
               const char* logFileName,
+              bool allowRestore,
+              uint64_t batchSize,
+              uint64_t epochStart,
               int cpuNumber);
 
     ~MVLogging();
-
-   void logAction(const mv_action *action, Buffer* buffer);
-   void logBatch(ActionBatch batch, Buffer* buffer);
 protected:
     virtual void Init() override;
     virtual void StartWorking() override;
 
 private:
+    /**
+     * Restore all transactions in the logFile.
+     */
+    void restore();
+    void logAction(const mv_action *action, Buffer* buffer);
+    void logBatch(ActionBatch batch, Buffer* buffer);
+
     SimpleQueue<ActionBatch> *inputQueue;
     SimpleQueue<ActionBatch> *outputQueue;
 
+    bool allowRestore;
     const char* logFileName;
     int logFileFd;
+
+    uint64_t batchSize;
+    uint64_t epochNo;
 };

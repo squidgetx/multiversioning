@@ -8,6 +8,7 @@
 #define _LOGGING_READ_BUFFER_H
 
 #include <cstddef>
+#include <cstring>
 #include <type_traits>
 
 #include "no_copy.h"
@@ -20,21 +21,28 @@ public:
 
     /**
      * Read out a primitive type.
+     *
+     * Return true on success, false otherwise.
      */
     template <typename T,
               typename = std::enable_if<std::is_arithmetic<T>::value>>
-    T read() {
-        unsigned char out[sizeof(T)];
-        readBytes(&out, sizeof(T));
+    bool read(T *out) {
+        unsigned char outArr[sizeof(T)];
+        auto nRead = readBytes(outArr, sizeof(T));
+        if (nRead < sizeof(T))
+            return false;
 
-        return reinterpret_cast<T>(out);
+        memcpy(out, outArr, sizeof(T));
+        return true;
     }
 
     /**
      * Read 'nBytes' from the buffer.
+     *
+     * Returns: the number of bytes actually read, or 0 if none remain.
      */
-    void read(unsigned char *out, std::size_t nBytes) {
-        readBytes(out, nBytes);
+    std::size_t read(unsigned char *out, std::size_t nBytes) {
+        return readBytes(out, nBytes);
     }
 protected:
     /**
@@ -72,6 +80,29 @@ private:
     unsigned char *_readPtr = nullptr;
     unsigned char *_buff = nullptr;
     std::size_t _buffLen = 0;
+};
+
+/**
+ * A 'ReadViewBuffer' wraps an underlying buffer, and will read
+ * 'len' bytes from that buffer.
+ *
+ * It can be used to handout portions of a buffer to other functions, while
+ * preventing them from reading excess data.
+ */
+class ReadViewBuffer : public IReadBuffer {
+public:
+    ReadViewBuffer(IReadBuffer *buffer, std::size_t len);
+    virtual ~ReadViewBuffer();
+
+    bool exhausted() {
+        return _nRead == _len;
+    }
+protected:
+    virtual std::size_t readBytes(unsigned char *out, std::size_t nBytes) override;
+private:
+    std::size_t _len;
+    std::size_t _nRead = 0;
+    IReadBuffer *_underlyingBuffer;
 };
 
 #endif /* _LOGGING_READ_BUFFER_H */

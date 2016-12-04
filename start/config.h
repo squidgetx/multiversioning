@@ -30,7 +30,8 @@ static struct option long_options[] = {
   {"hot_position", required_argument, NULL, 16},
   {"num_ppp_threads", required_argument, NULL, 17},
   {"log_file", required_argument, NULL, 18},
-  {NULL, no_argument, NULL, 18},
+  {"log_restore", no_argument, NULL, 19},
+  {NULL, no_argument, NULL, 20},
 };
 
 enum distribution_t {
@@ -116,6 +117,7 @@ struct MVConfig {
   uint64_t recordSize;
   uint32_t distribution;
   bool loggingEnabled;
+  bool logRestore;
   const char* logFileName;
   double theta;
         int read_pct;
@@ -145,6 +147,7 @@ class ExperimentConfig {
     HOT_POSITION,
     NUM_PPP_THREADS
     LOG_FILE,
+    LOG_RESTORE
   };
   unordered_map<int, char*> argMap;
 
@@ -225,6 +228,14 @@ class ExperimentConfig {
       if (argMap.count(LOG_FILE) > 0) {
         mvConfig.loggingEnabled = true;
         mvConfig.logFileName = argMap[LOG_FILE];
+      } else {
+        mvConfig.loggingEnabled = false;
+      }
+
+      if (argMap.count(LOG_RESTORE) > 0) {
+        mvConfig.logRestore = true;
+      } else {
+        mvConfig.logRestore = false;
       }
       
       if (argMap.count(THETA) > 0) {

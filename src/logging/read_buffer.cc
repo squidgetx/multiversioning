@@ -9,7 +9,7 @@
 
 FileBuffer::FileBuffer(int fd) : _fd(fd), PAGE_SIZE(getpagesize()) {
     void *buff = mmap(nullptr, PAGE_SIZE, PROT_READ | PROT_WRITE,
-                      MAP_ANONYMOUS, 0, 0);
+                      MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
     if (buff == MAP_FAILED) {
         std::cerr << "FileBuffer unable to map memory." << strerror(errno) <<
                      std::endl;
@@ -66,4 +66,19 @@ void FileBuffer::readFile() {
 
     _buffLen = bytesRead;
     _readPtr = _buff;
+}
+
+ReadViewBuffer::ReadViewBuffer(IReadBuffer *buffer, std::size_t len)
+    : _len(len), _underlyingBuffer(buffer) {
+}
+
+ReadViewBuffer::~ReadViewBuffer() {
+}
+
+std::size_t ReadViewBuffer::readBytes(unsigned char* out, std::size_t nBytes) {
+    std::size_t nToRead = _len - _nRead < nBytes ? _len - _nRead : nBytes;
+    std::size_t nRead = _underlyingBuffer->read(out, nToRead);
+
+    _nRead += nRead;
+    return nRead;
 }

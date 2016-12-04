@@ -495,6 +495,9 @@ static MVLogging* SetupLogging(MVConfig config,
         MVLogging *logging = new MVLogging(loggingInputQueue,
                                            outputQueue,
                                            config.logFileName,
+                                           config.logRestore,
+                                           config.epochSize,
+                                           2,
                                            config.numCCThreads + config.numWorkerThreads);
 
         *inputQueue_OUT = loggingInputQueue;
