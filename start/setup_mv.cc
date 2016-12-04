@@ -710,6 +710,9 @@ static MVScheduler** setup_scheduler_threads(MVConfig config,
         } else if (config.experiment < 5) {
                 stickies_per_thread = (((uint64_t)1)<<24);
                 num_tables = 2;
+        } else if (config.experiment == 5 || config.experiment == 6) {
+                stickies_per_thread = (((uint64_t)1)<<24);
+                num_tables = 1;
         } else {
                 assert(false);
         }

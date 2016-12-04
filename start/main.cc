@@ -4,6 +4,7 @@
 #include <eager_worker.h>
 #include <uniform_generator.h>
 #include <zipf_generator.h>
+#include <logging_experiment.h>
 #include <small_bank.h>
 #include <setup_occ.h>
 #include <setup_mv.h>
@@ -46,6 +47,8 @@ int main(int argc, char **argv) {
                   recordSize = cfg.mvConfig.recordSize;
           else if (cfg.mvConfig.experiment < 5)
                   recordSize = sizeof(SmallBankRecord);
+          else if (cfg.mvConfig.experiment == 5 || cfg.mvConfig.experiment == 6)
+                  recordSize = sizeof(LoggingRecord);
           else
                   assert(false);
           if (cfg.mvConfig.experiment < 3)

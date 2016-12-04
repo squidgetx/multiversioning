@@ -16,6 +16,7 @@ FileBuffer::FileBuffer(int fd) : _fd(fd), PAGE_SIZE(getpagesize()) {
         exit(EXIT_FAILURE);
     }
     _readPtr = reinterpret_cast<unsigned char*>(buff);
+    _buff = _readPtr;
 }
 
 FileBuffer::~FileBuffer() {
@@ -41,6 +42,7 @@ std::size_t FileBuffer::readBytes(unsigned char *out, std::size_t nBytes) {
         out += toRead;
         nBytes -= toRead;
         read += toRead;
+        _readPtr += toRead;
     }
 
     return read;

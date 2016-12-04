@@ -5,6 +5,7 @@
 
 #include "logging/mv_txn_deserializer.h"
 
+#include "logging_experiment.h"
 #include "db.h"
 #include "small_bank.h"
 #include "ycsb.h"
@@ -39,6 +40,12 @@ txn* MVTransactionDeserializer::deserialize(TxnType type, IReadBuffer *readBuffe
             break;
         case TxnType::YCSB_RMW:
             ret = ycsb_rmw::deserialize(readBuffer);
+            break;
+        case TxnType::LOGGING_INSERT:
+            ret = LoggingExperiment::InsertValue::deserialize(readBuffer);
+            break;
+        case TxnType::LOGGING_READ:
+            assert(false);
             break;
         default:
             assert(false);

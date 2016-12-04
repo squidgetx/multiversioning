@@ -16,7 +16,10 @@ enum class TxnType : uint32_t {
   /** YCSB transactions */
   YCSB_INSERT,
   YCSB_READONLY,
-  YCSB_RMW
+  YCSB_RMW,
+  /** Logging experiment transactions */
+  LOGGING_INSERT,
+  LOGGING_READ
 };
 
 #endif /* _TXN_TYPE_H */

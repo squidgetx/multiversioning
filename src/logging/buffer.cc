@@ -103,12 +103,12 @@ BufferReservation::BufferReservation(std::vector<Region>&& regions)
     : regions(std::move(regions)) {
 
     // Calculate remaining
-    if (!regions.size()) {
+    if (!this->regions.size()) {
         reservationRemaining = 0;
         return;
     }
 
-    for (const auto& region : regions) {
+    for (const auto& region : this->regions) {
         reservationRemaining += region.size();
     }
 }

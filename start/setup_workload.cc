@@ -6,10 +6,18 @@
 #include <zipf_generator.h>
 #include <ycsb.h>
 #include <small_bank.h>
+#include <logging_experiment.h>
 #include <set>
 #include <common.h>
 
 RecordGenerator *my_gen = NULL;
+
+static uint32_t logging_idx = 0;
+static const uint32_t n_logging_records = 10000;
+
+static uint64_t logging_value_for_idx(uint64_t idx) {
+        return idx * 2;
+}
 
 uint64_t gen_unique_key(RecordGenerator *gen,
                         std::set<uint64_t> *seen_keys)
@@ -280,9 +288,33 @@ uint32_t generate_ycsb_input(workload_config conf, txn ***loaders)
         return num_txns;
 }
 
+uint32_t generate_logging_experiment_input(workload_config conf, txn ***loaders) {
+        txn **ret;
+
+        uint64_t num_txns = conf.num_records;
+        ret = (txn**)malloc(sizeof(txn*)*num_txns);
+        for (uint32_t i = 0; i < num_txns; i++) {
+                if (conf.experiment == 6) {
+                        ret[i] = new LoggingExperiment::InsertValue(i, logging_value_for_idx(i));
+                } else {
+                        ret[i] = new LoggingExperiment::ReadValue(i, logging_value_for_idx(i));
+                }
+        }
+        *loaders = ret;
+        return num_txns;
+}
+
+txn* generate_logging_experiment_action(uint64_t record_idx) {
+        return new LoggingExperiment::ReadValue(
+                        record_idx % n_logging_records,
+                        logging_value_for_idx(record_idx % n_logging_records));
+}
+
 uint32_t generate_input(workload_config conf, txn ***loaders)
 {
-        if (conf.experiment == 3 || conf.experiment == 4) {
+        if (conf.experiment == 6 || conf.experiment == 5) {
+                return generate_logging_experiment_input(conf, loaders);
+        } else if (conf.experiment == 3 || conf.experiment == 4) {
                 return generate_small_bank_input(conf, loaders);
         } else if (conf.experiment < 3) {
                 return generate_ycsb_input(conf, loaders);
@@ -295,7 +327,9 @@ txn* generate_transaction(workload_config config)
 {
         txn *txn = NULL;
         
-        if (config.experiment == 3) {
+        if (config.experiment == 5 || config.experiment == 6) {
+                txn = generate_logging_experiment_action(logging_idx++);
+        } else if (config.experiment == 3) {
                 txn = generate_small_bank_action(config.num_records, false);
         } else if (config.experiment == 4) {
                 txn = generate_small_bank_action(config.num_records, true);
