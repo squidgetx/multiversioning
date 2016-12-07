@@ -145,7 +145,7 @@ class ExperimentConfig {
     READ_PCT,
     READ_TXN_SIZE,
     HOT_POSITION,
-    NUM_PPP_THREADS
+    NUM_PPP_THREADS,
     LOG_FILE,
     LOG_RESTORE
   };
