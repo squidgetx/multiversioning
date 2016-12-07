@@ -54,6 +54,7 @@ mv_action* generate_mv_action(txn *txn)
 
     /* Get the transaction's rw-sets. */
     action = new mv_action(txn);
+    assert(action != nullptr);
     txn->set_translator(action);
     convert_keys(action, txn);
 
@@ -78,7 +79,7 @@ bool MVActionBatchFactory::addTransaction(txn *txn) {
     action->__version = timestamp;
     _batch.actionBuf[_numAddedTxns++] = action;
 
-    return _numAddedTxns < _batchSize;
+    return _numAddedTxns <= _batchSize;
 }
 
 

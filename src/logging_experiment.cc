@@ -2,6 +2,8 @@
 
 #include "logging_experiment.h"
 
+#include <iostream>
+
 #include "logging/buffer.h"
 #include "logging/read_buffer.h"
 
@@ -45,6 +47,7 @@ LoggingExperiment::ReadValue::ReadValue(uint64_t key, uint64_t expectedValue)
 bool LoggingExperiment::ReadValue::Run() {
     LoggingRecord *rec = (LoggingRecord*)get_read_ref(_key, LOGGING_EXPERIMENT_TABLE);
     assert(rec->value == _expectedValue);
+    std::cerr << "Confirmed that key: " << _key << " value equals " << rec->value << std::endl;
     return true;
 }
 

@@ -111,6 +111,8 @@ BufferReservation::BufferReservation(std::vector<Region>&& regions)
     for (const auto& region : this->regions) {
         reservationRemaining += region.size();
     }
+
+    writePtr = this->regions[currentRegion].data();
 }
 
 BufferReservation::BufferReservation(BufferReservation &&other)

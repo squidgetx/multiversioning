@@ -20,9 +20,12 @@
  * path.
  */
 class MVActionBatchFactory {
-    DISALLOW_COPY(MVActionBatchFactory);
 public:
     MVActionBatchFactory(uint64_t epoch, uint64_t batchSize);
+    ~MVActionBatchFactory() = default;
+    MVActionBatchFactory(const MVActionBatchFactory& other) = default;
+
+    MVActionBatchFactory& operator=(const MVActionBatchFactory& other) = default;
 
     /**
      * Add a transaction to the batch.
