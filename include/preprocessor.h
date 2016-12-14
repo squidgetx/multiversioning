@@ -25,7 +25,7 @@ struct MVActionDistributorConfig {
   SimpleQueue<ActionBatch> *outputQueue;
   SimpleQueue<ActionBatch> **pubQueues;
   SimpleQueue<ActionBatch> **subQueues;
-  int label;
+  int64_t label;
 };
 
 /* An MVActionDistributor is the real first stage of the transaction

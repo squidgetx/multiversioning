@@ -640,8 +640,8 @@ static void init_database(MVConfig config,
                           workload_config w_conf,
                           SimpleQueue<ActionBatch> *input_queue,
                           SimpleQueue<ActionBatch> *output_queue,
-                          MVActionDistributor **ppp_threads,
                           MVLogging *logging_thread,
+                          MVActionDistributor **ppp_threads,
                           MVScheduler **sched_threads,
                           Executor **exec_threads)
                           
@@ -801,6 +801,8 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
                                                &schedOutputQueues,
                                                schedGCQueues);
 
+        mv_setup_input_array(&input_placeholder, mv_config, w_config);
+
         // If this line is moved to line 929 (before setup_ppp_threads)
         // the output queues are set to null value..??
         outputQueue = SetupQueuesMany<ActionBatch>(INPUT_SIZE,
@@ -815,14 +817,14 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
         SimpleQueue<ActionBatch> *systemInputQueue = pppInputQueue;
         if (mv_config.loggingEnabled) {
                 loggingThread = SetupLogging(mv_config, &loggingInputQueue,
-                                             schedInputQueue);
+                                             pppInputQueue);
                 systemInputQueue = loggingInputQueue;
         }
 
         // Execute the initial transactions needed to load experiment data
         // into the database.
         init_database(mv_config, w_config, systemInputQueue, outputQueue,
-                      loggingThread, schedThreads, execThreads);
+                      loggingThread, pppThreads, schedThreads, execThreads);
 
         pin_memory();
 
