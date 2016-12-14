@@ -50,8 +50,9 @@ std::size_t FileBuffer::readBytes(unsigned char *out, std::size_t nBytes) {
 
 void FileBuffer::readFile() {
     std::size_t bytesRead = 0;
+    _readPtr = _buff;
     while (bytesRead < PAGE_SIZE) {
-        std::size_t amtRead = ::read(_fd, _buff, PAGE_SIZE - bytesRead);
+        std::size_t amtRead = ::read(_fd, _readPtr, PAGE_SIZE - bytesRead);
         if ((int)amtRead == -1) {
             std::cerr << "FileBuffer::readFile unable to read. "
                       << strerror(errno)
@@ -63,6 +64,7 @@ void FileBuffer::readFile() {
             break;
         }
 
+        _readPtr += amtRead;
         bytesRead += amtRead;
     }
 

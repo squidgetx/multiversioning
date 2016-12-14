@@ -98,6 +98,7 @@ void MVLogging::restore() {
 
         ReadViewBuffer txnBuffer(&readBuffer, txnDataLength);
         auto *txn = txnDeserializer.deserialize(type, &txnBuffer);
+        txn->mark_is_restore();
         while (!batchFactory.addTransaction(txn)) {
             ActionBatch batch = batchFactory.getBatch();
             outputQueue->EnqueueBlocking(batch);
@@ -106,6 +107,7 @@ void MVLogging::restore() {
         }
 
         assert(txnBuffer.exhausted());
+        std::cerr << "Restored" << std::endl;
     }
 }
 

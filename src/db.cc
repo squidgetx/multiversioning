@@ -57,3 +57,12 @@ int txn::txn_rand()
         return trans->rand();
 }
 
+void txn::mark_is_restore()
+{
+        is_restore_txn = true;
+}
+
+bool txn::get_is_restore()
+{
+        return is_restore_txn;
+}

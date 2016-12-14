@@ -44,6 +44,11 @@ std::size_t Buffer::writeBytes(const unsigned char* bytes, std::size_t len) {
 
 
 void Buffer::writeToFile(int fd) {
+    // Cap the last region.
+    if (regions.size()) {
+        regions[regions.size() - 1].iov_len = writePtr - regions[regions.size() - 1].data();
+    }
+
     std::size_t written = 0;
     while (written < totalBytes) {
         std::size_t write_count = writev(fd, regions.data(), regions.size());

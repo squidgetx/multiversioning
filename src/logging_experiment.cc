@@ -37,6 +37,8 @@ txn* LoggingExperiment::InsertValue::deserialize(IReadBuffer *buffer) {
     assert(buffer->read(&key));
     assert(buffer->read(&value));
 
+    std::cerr << "Restore InsertValue{"<<key<<", "<<value<<"}" << std::endl;
+
     return new LoggingExperiment::InsertValue(key, value);
 }
 

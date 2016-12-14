@@ -295,9 +295,9 @@ uint32_t generate_logging_experiment_input(workload_config conf, txn ***loaders)
         ret = (txn**)malloc(sizeof(txn*)*num_txns);
         for (uint32_t i = 0; i < num_txns; i++) {
                 if (conf.experiment == 6) {
-                        ret[i] = new LoggingExperiment::InsertValue(i, logging_value_for_idx(i));
+                        ret[i] = new LoggingExperiment::InsertValue(i % n_logging_records, logging_value_for_idx(i % n_logging_records));
                 } else {
-                        ret[i] = new LoggingExperiment::ReadValue(i, logging_value_for_idx(i));
+                        ret[i] = new LoggingExperiment::ReadValue(i % n_logging_records, logging_value_for_idx(i % n_logging_records));
                 }
         }
         *loaders = ret;

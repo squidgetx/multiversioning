@@ -212,6 +212,8 @@ void Executor::ExecPending()
 /* Process a single batch of transactions. */
 void Executor::ProcessBatch(const ActionBatch &batch) 
 {
+        bool isLogBatch = false;
+
         for (int i = config.threadId; i < (int)batch.numActions;
              i += config.numExecutors) {
                 while (pendingList->Size() > 0) {
@@ -219,6 +221,10 @@ void Executor::ProcessBatch(const ActionBatch &batch)
                 }
 
                 mv_action *cur = batch.actionBuf[i];
+                if (!isLogBatch && cur->get_is_restore()) {
+                        isLogBatch = true;
+                }
+
                 if (!ProcessSingle(cur)) {
                         pendingList->EnqueuePending(cur);
                 }
@@ -229,7 +235,10 @@ void Executor::ProcessBatch(const ActionBatch &batch)
         }
 
         ActionBatch dummy = {NULL, 0};
-        config.outputQueue->EnqueueBlocking(dummy);  
+
+        if (!isLogBatch) { // We don't want to output log restore batches to our output queue.
+                config.outputQueue->EnqueueBlocking(dummy);  
+        }
 }
 
 // Returns the epoch of the oldest pending record.
