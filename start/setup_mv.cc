@@ -643,10 +643,12 @@ static timespec run_experiment(SimpleQueue<ActionBatch> *input_queue,
                         (&output_queue[j])->DequeueBlocking();
         }
 
-        // Wait for logging to finish.
-        loggingExitIn->EnqueueBlocking(true);
-        bool v = loggingExitOut->DequeueBlocking();
-        assert(v);
+        if (loggingExitIn) {
+          // Wait for logging to finish.
+          loggingExitIn->EnqueueBlocking(true);
+          bool v = loggingExitOut->DequeueBlocking();
+          assert(v);
+        }
 
         barrier();
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end_time);
