@@ -486,18 +486,30 @@ static MVScheduler** SetupSchedulers(uint32_t cpuStart,
 
 static MVLogging* SetupLogging(MVConfig config,
                                SimpleQueue<ActionBatch> **inputQueue_OUT,
+                               SimpleQueue<bool> **exitQueueIn_OUT,
+                               SimpleQueue<bool> **exitQueueOut_OUT,
                                SimpleQueue<ActionBatch> *outputQueue) {
         // Allocate logging input queue.
         char *inputArray = (char*)alloc_mem(CACHE_LINE*INPUT_SIZE, 0);
         SimpleQueue<ActionBatch> *loggingInputQueue =
                 new SimpleQueue<ActionBatch>(inputArray, INPUT_SIZE);
 
+        char* exitQueueStorage = (char*)alloc_mem(CACHE_LINE*2, 0);
+        assert(exitQueueStorage);
+
+        *exitQueueIn_OUT = new SimpleQueue<bool>(exitQueueStorage, 1);
+        *exitQueueOut_OUT = new SimpleQueue<bool>(exitQueueStorage + CACHE_LINE, 1);
+
+
         MVLogging *logging = new MVLogging(loggingInputQueue,
                                            outputQueue,
+                                           *exitQueueIn_OUT,
+                                           *exitQueueOut_OUT,
                                            config.logFileName,
                                            config.logRestore,
                                            config.epochSize,
                                            2,
+                                           config.logAsync,
                                            config.numCCThreads + config.numWorkerThreads);
 
         *inputQueue_OUT = loggingInputQueue;
@@ -602,6 +614,8 @@ static void write_results(MVConfig config, timespec elapsed_time)
 
 static timespec run_experiment(SimpleQueue<ActionBatch> *input_queue,
                                SimpleQueue<ActionBatch> *output_queue,
+                               SimpleQueue<bool> *loggingExitIn,
+                               SimpleQueue<bool> *loggingExitOut,
                                std::vector<ActionBatch> inputs,
                                uint32_t num_workers)
 {
@@ -628,6 +642,12 @@ static timespec run_experiment(SimpleQueue<ActionBatch> *input_queue,
                 for (j = 0; j < num_workers; ++j) 
                         (&output_queue[j])->DequeueBlocking();
         }
+
+        // Wait for logging to finish.
+        loggingExitIn->EnqueueBlocking(true);
+        bool v = loggingExitOut->DequeueBlocking();
+        assert(v);
+
         barrier();
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end_time);
         barrier();
@@ -761,6 +781,8 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
 
         // The input queue for the logging thread.
         SimpleQueue<ActionBatch> *loggingInputQueue = nullptr;
+        SimpleQueue<bool> *loggingExitSignalIn = nullptr;
+        SimpleQueue<bool> *loggingExitSignalOut = nullptr;
 
         // The input/output queue for the preprocessing layer
         SimpleQueue<ActionBatch> *pppInputQueue;
@@ -817,6 +839,8 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
         SimpleQueue<ActionBatch> *systemInputQueue = pppInputQueue;
         if (mv_config.loggingEnabled) {
                 loggingThread = SetupLogging(mv_config, &loggingInputQueue,
+                                             &loggingExitSignalIn,
+                                             &loggingExitSignalOut,
                                              pppInputQueue);
                 systemInputQueue = loggingInputQueue;
         }
@@ -830,6 +854,8 @@ void do_mv_experiment(MVConfig mv_config, workload_config w_config)
 
         elapsed_time = run_experiment(systemInputQueue,
                                       outputQueue,
+                                      loggingExitSignalIn,
+                                      loggingExitSignalOut,
                                       input_placeholder,// 1);
                                       mv_config.numWorkerThreads);
         write_results(mv_config, elapsed_time);

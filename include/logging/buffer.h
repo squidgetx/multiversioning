@@ -5,13 +5,16 @@
 #ifndef _LOGGING_BUFFER_H
 #define _LOGGING_BUFFER_H
 
+#include <aio.h>
 #include <cassert>
 #include <cstddef>
+#include <deque>
 #include <exception>
 #include <limits>
 #include <sys/uio.h>
 #include <type_traits>
 #include <vector>
+#include <memory>
 
 #include "no_copy.h"
 
@@ -139,6 +142,8 @@ public:
      * The contents of the buffer remain after writing.
      */
     void writeToFile(int fd);
+
+    void writeToFileAsync(int fd, std::deque<std::unique_ptr<aiocb>> *ioblk_vec);
 
     /**
      * Returns a BufferReservation, which maintains a reference to a

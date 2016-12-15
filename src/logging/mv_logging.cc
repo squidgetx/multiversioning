@@ -1,12 +1,15 @@
 #include "logging/mv_logging.h"
 
+#include <aio.h>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <fcntl.h>
 #include <iostream>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <memory>
 
 #include "concurrent_queue.h"
 #include "db.h"
@@ -16,18 +19,28 @@
 #include "logging/mv_action_serializer.h"
 #include "logging/mv_txn_deserializer.h"
 
+// The maximum number of batches we are allowed to be behind the rest of the
+// system.
+#define MAX_BEHIND 10
+
 MVLogging::MVLogging(SimpleQueue<ActionBatch> *inputQueue,
                      SimpleQueue<ActionBatch> *outputQueue,
+                     SimpleQueue<bool> *exitSignalIn,
+                     SimpleQueue<bool> *exitSignalOut,
                      const char* logFileName,
                      bool allowRestore,
                      uint64_t batchSize,
                      uint64_t epochStart,
+                     bool asyncMode,
                      int cpuNumber) :
     Runnable(cpuNumber), inputQueue(inputQueue), outputQueue(outputQueue),
+    exitSignalIn(exitSignalIn),
+    exitSignalOut(exitSignalOut),
     allowRestore(allowRestore),
     logFileName(logFileName),
     batchSize(batchSize),
-    epochNo(epochStart) {
+    epochNo(epochStart),
+    asyncMode(asyncMode) {
 }
 
 MVLogging::~MVLogging() {
@@ -37,7 +50,8 @@ MVLogging::~MVLogging() {
 }
 
 void MVLogging::Init() {
-    logFileFd = open(logFileName, O_CREAT | O_APPEND | O_WRONLY | O_DSYNC,
+    int dsync = !asyncMode ? O_DSYNC : 0;
+    logFileFd = open(logFileName, O_CREAT | O_APPEND | O_WRONLY | dsync,
                      S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (logFileFd == -1) {
         // TODO is there some kind of existing error handling.
@@ -48,10 +62,105 @@ void MVLogging::Init() {
     }
 }
 
-void MVLogging::StartWorking() {
-    if (allowRestore) {
-        restore();
+struct IORequest {
+    Buffer buf;
+    std::deque<std::unique_ptr<aiocb>> aio_blocks;
+    uint64_t epochNo;
+
+    /**
+     * Check whether more are completed.
+     *
+     * Returns 0 if there was no IO error.
+     */
+    int check_completion() {
+        while (true) {
+            if (aio_blocks.size() == 0)
+                return 0;
+
+            std::unique_ptr<aiocb>& ioblk = aio_blocks.front();
+            int err;
+            if ((err = aio_error(ioblk.get())) == EINPROGRESS) {
+                break;
+            } else if (err > 0) {
+                return err;
+            } else if (err == 0) {
+                aio_blocks.pop_front();
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        return 0;
+    };
+
+    bool completed() {
+        return aio_blocks.size() == 0;
+    };
+};
+
+void MVLogging::runAsync() {
+    std::deque<IORequest> requests;
+
+    while (true) {
+        // Get new action batch.
+
+        if (requests.size() < MAX_BEHIND && !shouldExit) {
+            ActionBatch batch;
+            if (inputQueue->Dequeue(&batch)) {
+
+                if (GET_MV_EPOCH(batch.actionBuf[0]->__version) != epochNo) {
+                    for (uint64_t i = 0; i < batch.numActions; i++) {
+                        batch.actionBuf[i]->__version = CREATE_MV_TIMESTAMP(epochNo, i);
+                    }
+                }
+
+                // Output batch.
+                outputQueue->EnqueueBlocking(batch);
+
+                requests.emplace_back();
+                IORequest &request = requests.back();
+                request.epochNo = epochNo;
+
+                // Serialize batch.
+                // TODO Make sure batch isn't deallocated before writing to log.
+                logBatch(batch, &request.buf);
+
+                // Write to file async.
+                request.buf.writeToFileAsync(logFileFd, &request.aio_blocks);
+                epochNo++;
+            } else {
+                // See if we should be exiting.
+                exitSignalIn->Dequeue(&shouldExit);
+            }
+        }
+
+        // Clean up any resources.  Acknowledgement would happen here.
+        while (requests.size()) {
+            IORequest& head = requests.front();
+            int err;
+            if ((err = head.check_completion()) != 0) {
+                // Error
+                std::cerr << "ASYNC IO Error. Reason: " << strerror(err) << std::endl;
+                exit(EXIT_FAILURE);
+            }
+
+            if (head.completed()) {
+                requests.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        if (shouldExit && requests.size() == 0) {
+            exitSignalOut->EnqueueBlocking(true);
+        }
     }
+}
+
+void MVLogging::runSync() {
+    // We don't care if we are terminated since we run sync
+    exitSignalOut->EnqueueBlocking(true);
 
     while (true) {
         ActionBatch batch = inputQueue->DequeueBlocking();
@@ -72,6 +181,18 @@ void MVLogging::StartWorking() {
 
         // Write to file.
         batchBuf.writeToFile(logFileFd);
+    }
+}
+
+void MVLogging::StartWorking() {
+    if (allowRestore) {
+        restore();
+    }
+
+    if (asyncMode) {
+        runAsync();
+    } else {
+        runSync();
     }
 }
 
@@ -107,7 +228,6 @@ void MVLogging::restore() {
         }
 
         assert(txnBuffer.exhausted());
-        std::cerr << "Restored" << std::endl;
     }
 
     ActionBatch batch = batchFactory.getBatch();

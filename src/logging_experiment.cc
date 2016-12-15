@@ -37,8 +37,6 @@ txn* LoggingExperiment::InsertValue::deserialize(IReadBuffer *buffer) {
     assert(buffer->read(&key));
     assert(buffer->read(&value));
 
-    std::cerr << "Restore InsertValue{"<<key<<", "<<value<<"}" << std::endl;
-
     return new LoggingExperiment::InsertValue(key, value);
 }
 
@@ -49,7 +47,6 @@ LoggingExperiment::ReadValue::ReadValue(uint64_t key, uint64_t expectedValue)
 bool LoggingExperiment::ReadValue::Run() {
     LoggingRecord *rec = (LoggingRecord*)get_read_ref(_key, LOGGING_EXPERIMENT_TABLE);
     assert(rec->value == _expectedValue);
-    std::cerr << "Confirmed that key: " << _key << " value equals " << rec->value << std::endl;
     return true;
 }
 

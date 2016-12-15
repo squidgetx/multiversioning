@@ -29,10 +29,13 @@ public:
      */
     MVLogging(SimpleQueue<ActionBatch> *inputQueue,
               SimpleQueue<ActionBatch> *outputQueue,
+              SimpleQueue<bool> *exitSignalIn,
+              SimpleQueue<bool> *exitSignalOut,
               const char* logFileName,
               bool allowRestore,
               uint64_t batchSize,
               uint64_t epochStart,
+              bool asyncMode,
               int cpuNumber);
 
     ~MVLogging();
@@ -41,6 +44,9 @@ protected:
     virtual void StartWorking() override;
 
 private:
+    void runAsync();
+    void runSync();
+
     /**
      * Restore all transactions in the logFile.
      */
@@ -51,10 +57,20 @@ private:
     SimpleQueue<ActionBatch> *inputQueue;
     SimpleQueue<ActionBatch> *outputQueue;
 
+    /**
+     * Used to coordinate waiting between the main thread and the
+     * logging thread to make sure log is done before exit.
+     */
+    SimpleQueue<bool> *exitSignalIn;
+    SimpleQueue<bool> *exitSignalOut;
+    bool shouldExit = false;
+
     bool allowRestore;
     const char* logFileName;
     int logFileFd;
 
     uint64_t batchSize;
     uint64_t epochNo;
+
+    bool asyncMode;
 };

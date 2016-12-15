@@ -1,12 +1,17 @@
 #include "logging/buffer.h"
 
+#include <aio.h>
 #include <cstddef>
 #include <cstring>
+#include <deque>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/uio.h>
+#include <signal.h>
 #include <unistd.h>
 #include <iostream>
 #include <vector>
+#include <memory>
 
 Buffer::Buffer() : page_size(getpagesize()) {
 }
@@ -62,9 +67,40 @@ void Buffer::writeToFile(int fd) {
     }
 }
 
+void Buffer::writeToFileAsync(int fd, std::deque<std::unique_ptr<aiocb>> *ioblk_vec) {
+    // Cap the last region.
+    if (regions.size()) {
+        regions[regions.size() - 1].iov_len = writePtr - regions[regions.size() - 1].data();
+    }
+
+    for (const auto& region : regions) {
+        std::unique_ptr<aiocb> cb(new aiocb);
+        memset(cb.get(), 0, sizeof(aiocb));
+        cb->aio_fildes = fd;
+        cb->aio_buf = region.data();
+        cb->aio_nbytes = region.size();
+
+        int err = aio_write(cb.get());
+        if (err == -1) {
+            std::cerr << "Fatal error: writeToFileAsync cannot write. Reason: "
+                      << strerror(errno)
+                      << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        ioblk_vec->push_back(std::move(cb));
+    }
+
+    std::unique_ptr<aiocb> cb(new aiocb);
+    memset(cb.get(), 0, sizeof(aiocb));
+    cb->aio_fildes = fd;
+    aio_fsync(O_DSYNC, cb.get());
+    ioblk_vec->push_back(std::move(cb));
+}
+
 void Buffer::newRegion() {
     // TODO faster, core local memory allocation.
-    void* regionData = mmap(nullptr, page_size, PROT_READ | PROT_WRITE,
+    void* regionData = mmap(nullptr, page_size*128, PROT_READ | PROT_WRITE,
                             MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (regionData == MAP_FAILED) {
         std::cerr << "Fatal error: newRegion cannot allocate. Reason: "
@@ -74,7 +110,7 @@ void Buffer::newRegion() {
     }
 
     regions.emplace_back(reinterpret_cast<unsigned char*>(regionData),
-                         page_size);
+                         page_size*128);
     currentRegion = regions.size() - 1;
     writePtr = regions[currentRegion].data();
 }
