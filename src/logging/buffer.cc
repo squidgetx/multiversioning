@@ -64,7 +64,7 @@ void Buffer::writeToFile(int fd) {
 
 void Buffer::newRegion() {
     // TODO faster, core local memory allocation.
-    void* regionData = mmap(nullptr, page_size, PROT_READ | PROT_WRITE,
+    void* regionData = mmap(nullptr, page_size*256, PROT_READ | PROT_WRITE,
                             MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (regionData == MAP_FAILED) {
         std::cerr << "Fatal error: newRegion cannot allocate. Reason: "
@@ -74,7 +74,7 @@ void Buffer::newRegion() {
     }
 
     regions.emplace_back(reinterpret_cast<unsigned char*>(regionData),
-                         page_size);
+                         page_size*256);
     currentRegion = regions.size() - 1;
     writePtr = regions[currentRegion].data();
 }
