@@ -49,7 +49,7 @@ public:
     /**
      * Write 'len' bytes from 'data' into the buffer.
      *
-     * Returns the number of bytes written.  May be less that requested
+     * Returns the number of bytes written.  May be less than requested
      * if the reserved space is exceeded.
      */
     std::size_t write(const unsigned char *data, std::size_t len) {

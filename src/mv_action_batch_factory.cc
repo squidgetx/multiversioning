@@ -84,6 +84,7 @@ bool MVActionBatchFactory::addTransaction(txn *txn) {
 
 
 ActionBatch MVActionBatchFactory::getBatch() {
+    _batch.numActions = _numAddedTxns;
     return _batch;
 }
 

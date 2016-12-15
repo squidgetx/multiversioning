@@ -109,6 +109,13 @@ void MVLogging::restore() {
         assert(txnBuffer.exhausted());
         std::cerr << "Restored" << std::endl;
     }
+
+    ActionBatch batch = batchFactory.getBatch();
+    // Enqueue a partial batch.
+    if (batch.numActions < batchSize) {
+            outputQueue->EnqueueBlocking(batch);
+            epochNo++;
+    }
 }
 
 void MVLogging::logAction(const mv_action *action, Buffer* buffer) {
